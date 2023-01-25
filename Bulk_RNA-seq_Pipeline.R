@@ -1,6 +1,6 @@
 # RNA-Seq Pipeline for the Patankar Barroilhet Lab 
 # Author: Rob Schultz 1/23/22
-
+# This is an edit
 ### Before Running the Script, Please update the username, setwd, fastQ_path, and extension
 
 # Set the working directory--determine the folder on your computer that R is working from

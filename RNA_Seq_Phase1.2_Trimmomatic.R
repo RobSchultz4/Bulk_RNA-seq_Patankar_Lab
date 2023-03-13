@@ -3,46 +3,47 @@
 # Phase 1.2 -- Trimmomatic. Run this script after running FastQC to Trim reads as needed. 
 
 ### Before Running the Script:
-# Put the fastqs into the trimmomatic fastQ_folder folder
-# Make sure for each fastq that there is the forward and reverse pair in the folder
-# Make sure the Forward Reads have a 1 at the end of their names and the Reverse reads have a 2 at the end of their names for example:
-# D_1_1.fq.gz and D_1_2.fq.gz are the forward and reverse reads for the D_1_ sample with the extension .fq.gz
 # Update the Trimmomatic setting as needed
-# Please update the username, setwd, fastQ_folder, and extension if needed.
-# Set the working directory--determine the folder on your computer that R is working from
-# The default is the user's documents, so, enter the path to the desired folder from there
-
+# Please update the username
 
 #username <- 'betancourtpo' 
 #setwd(paste("C:/Users/",username, "/Documents/FastQC",sep = ""))
 
 username <- 'rmschultz3' 
-setwd(paste("C:/Users/",username, "/Documents/OVCAR3_ATO_RNA-seq/Trimmomatic-0.39",sep = ""))
+setwd(paste("C:/Users/",username, "/Documents/rna-seq",sep = ""))
 
-# Path to FastQ files with RNA-seq results, this will also be where FastQC results go
-# The FastQ files need to all be in one subfolder from the directory where FastQC is
-fastQ_folder <- "FASTQ_data" #Do not include a trailing /
-extension <- '.fq.gz'
-output_folder <- "results" # Folder where results will be stored
+# Set file and folder naming parameters
+#Do not include a trailing /
+project_name <- "ovcar3_ato" # folder name for the present project
+fastQ_folder_name <- "fastqs" # folder name containing paired fastq files
+extension <- '.fq.gz' # file extension of fastq files
+output_folder_name <- "trimmed_fastqs" # folder where results will be stored
+
+
 
 ### Trimmomatic Settings - If you don't want to include a step, type FALSE
+# Specify which Illumina sequencer is used (Needed to remove the right adapter sequences)
+# Choose from: NexteraPE-PE, TruSeq2-PE, TruSeq2-SE, TruSeq3-PE, TruSeq3-PE-2, or TruSeq3-SE
+Illumina_Sequencer <- "TruSeq3-PE" 
 # Varies
 Trim_From_Front <- 10 #Cut the specified number of bases from the start of the read
 #Usually the same
-Quality_Leading <- 3 # Cut bases off the start of a read, if below this threshold quality 
-Quality_Trailing <- 3 # Cut bases off the end of a read, if below this threshold quality
+Quality_Leading <- 20 # Cut bases off the start of a read, if below this threshold quality 
+Quality_Trailing <- 20 # Cut bases off the end of a read, if below this threshold quality
 Minimum_Length <- FALSE #Drop the read if it is below a specified length
-
+Make_Log <- FALSE #if True, trimmomatic will write a log file... They are very big so I dont reccommend
   
 ###The Script is Automated from here
 # Load Libraries
 library(sys) # for system2
 
-# Create the command to Run Trimmomatic on all files with <extension> in fastQ_folder
+# Define Paths
+fastQ_path <- paste("projects", project_name, fastQ_folder_name, sep = "/")
+output_path <- paste("projects", project_name, output_folder_name, sep = "/")
 
 
-
-fileNames <- dir(fastQ_folder)
+# Create the command to Run Trimmomatic on all files with <extension> in fastQ_path
+fileNames <- dir(fastQ_path)
 
 for (file1 in fileNames){ # remove files that are not fastqs
   print(file1)
@@ -51,7 +52,7 @@ for (file1 in fileNames){ # remove files that are not fastqs
   }
 }
 
-# I need to extract the unique samples from the file
+# Extract the unique sample names from the file
 getSampleName <- function(file1){
   substr(file1,1,nchar(file1)-nchar(extension)-1)
 }
@@ -63,10 +64,8 @@ for(file1 in fileNames){
 sampleNames <- unique(sampleNames)
 
 #Update Steps with the values given
-removeAdapterSettings <- "ILLUMINACLIP:adapters/TruSeq3-PE.fa:2:30:10:2:True"
+removeAdapterSettings <- paste("ILLUMINACLIP:trimmomatic-0.39/adapters/",Illumina_Sequencer,".fa:2:30:10:2:True",sep = "")
 phredSetting <- "-phred33"
-#TrimLogSetting <- "-trimlog"
-TrimLogSetting <- ""
 leadingSettings <- ""
 if(Quality_Leading){leadingSettings <- paste("LEADING:",Quality_Leading,sep = "")}
 trailingSettings <- ""
@@ -75,19 +74,21 @@ minLenSettings <- ""
 if (Minimum_Length){minLenSettings <- paste("MINLEN:",Minimum_Length,sep = "")}
 headcropSettings <- ""
 if (Trim_From_Front){headcropSettings <- paste("HEADCROP:", Trim_From_Front,sep = "")}
-log <- "-trimlog log"
 
 
-trim_command <- paste("java -jar dist/jar/Trimmomatic-0.39.jar PE", phredSetting,TrimLogSetting, sep = " ")
+
+trim_command <- paste("java -jar trimmomatic-0.39/dist/jar/Trimmomatic-0.39.jar PE", phredSetting, sep = " ")
 all_outputs <- c()
 commands <- c()
 count <- 1
 for (sn in sampleNames){
-  log_info <- paste("-trimlog log",count,".txt", sep = "")
-  in_prefix <- paste(fastQ_folder, sn, sep="/")
-  out_prefix <- paste(output_folder, sn, sep="/")
+  if (Make_Log == TRUE){
+    log_info <- paste("-trimlog log",count,".txt", sep = "")
+  } else{ log_info = ""}
+  in_prefix <- paste(fastQ_path, sn, sep="/")
+  out_prefix <- paste(output_path, sn, sep="/")
   inputs <- paste(paste(in_prefix,1,extension, sep = ""),paste(in_prefix,2,extension, sep = ""), sep = " ")
-  outputs <- paste(paste(out_prefix,1,"_paired_output",extension,sep = ""), paste(out_prefix,1,"_unpaired_output",extension,sep = ""),paste(out_prefix,2,"_paired_output",extension,sep = ""), paste(out_prefix,2,"_unpaired_output",extension,sep = ""),sep = " ")
+  outputs <- paste(paste(out_prefix,"paired_output_",1,extension,sep = ""), paste(out_prefix,"unpaired_output_",1,extension,sep = ""),paste(out_prefix,"paired_output_",2,extension,sep = ""), paste(out_prefix,"unpaired_output_",2,extension,sep = ""),sep = " ")
   steps <- paste(removeAdapterSettings, leadingSettings, trailingSettings, minLenSettings,sep = " ")
   command <- paste(trim_command,log_info,inputs, outputs,steps, sep = " ")
   commands <- c(commands,command)
@@ -97,9 +98,9 @@ for (sn in sampleNames){
 }
 
 # Create results folder if its not there already:
-if (!output_folder %in% dir()){
-  dir.create(output_folder)
-}
+#if (!output_folder %in% dir()){
+# dir.create(output_folder)
+#}
 
 #for (output in strsplit(paste(all_outputs,collapse = " "), " ")){
 #  print(output)
@@ -107,16 +108,17 @@ if (!output_folder %in% dir()){
 #}
 
 
+
 # Run Trimmomatic -- with exec_wait, R will wait for the process to finish before continuing...
 # If the process is taking too long press Esc to exit the process
 
 res_trims <- c()
 for(command in commands){
-  res_trims <- append(res_trims,exec_wait(command, std_out = TRUE, std_err = TRUE))
+  res_trims <- c(res_trims,exec_wait(command, std_out = TRUE, std_err = TRUE))
 }
 
 
 # Check Trim output Folder
 
-dir(output_folder)
+dir(output_path)
 
